@@ -6,36 +6,38 @@ ReQFuse 先在各自模态内恢复图像，再估计恢复后的残留误差，
 最后由 Restormer 风格的融合网络输出融合结果。单一模型只针对合成退化池训练一次，
 即可应对雨、雪、雾、噪声、模糊、低光照、红外条纹与低对比度——无需按条件微调。
 
-<p align="center">
-  <img src="assets/teaser.jpg" width="920" alt="干净可见光 | 雨退化可见光 | 红外 | ReQFuse 输出（MSRS 夜景）"/>
-</p>
-
 ## 融合结果
 
 以下结果全部由同一份训练配方产生：**MSRS 测试集 + 人工合成退化，中等强度
 （level 2）**，由 [generate_degradation.py](generate_degradation.py) 生成。
 所有条件使用同一份模型权重。
 
+**夜景 `00004N` 雨条件**——输入退化图像对，直接输出融合 RGB：
+
+| 干净可见光 | 雨退化可见光（输入） | 红外（输入） | ReQFuse 输出 |
+|:---:|:---:|:---:|:---:|
+| <img src="assets/results/night_clean_vi.jpg" width="230"/> | <img src="assets/results/night_rain_vi.jpg" width="230"/> | <img src="assets/results/night_ir.jpg" width="230"/> | <img src="assets/results/night_fused.jpg" width="230"/> |
+
 ### 可见光退化输入（配对干净红外）
 
 | 条件 | 退化可见光（输入） | 红外（输入） | ReQFuse 输出 |
-|---|---|---|---|
-| **雨** — 覆盖 5%, α 0.30 | <img src="assets/results/vi_rain_input.jpg" width="285"/> | <img src="assets/results/vi_rain_ir.jpg" width="285"/> | <img src="assets/results/vi_rain_fused.jpg" width="285"/> |
-| **雪** — 覆盖 6%, α 0.70 | <img src="assets/results/vi_snow_input.jpg" width="285"/> | <img src="assets/results/vi_snow_ir.jpg" width="285"/> | <img src="assets/results/vi_snow_fused.jpg" width="285"/> |
-| **雾** — β 1.0 | <img src="assets/results/vi_haze_input.jpg" width="285"/> | <img src="assets/results/vi_haze_ir.jpg" width="285"/> | <img src="assets/results/vi_haze_fused.jpg" width="285"/> |
-| **噪声** — σ 10 + 泊松 | <img src="assets/results/vi_noise_input.jpg" width="285"/> | <img src="assets/results/vi_noise_ir.jpg" width="285"/> | <img src="assets/results/vi_noise_fused.jpg" width="285"/> |
-| **模糊** — 21×21, σ 2.0 | <img src="assets/results/vi_blur_input.jpg" width="285"/> | <img src="assets/results/vi_blur_ir.jpg" width="285"/> | <img src="assets/results/vi_blur_fused.jpg" width="285"/> |
-| **低光照** — γ 2.0 | <img src="assets/results/vi_low_light_input.jpg" width="285"/> | <img src="assets/results/vi_low_light_ir.jpg" width="285"/> | <img src="assets/results/vi_low_light_fused.jpg" width="285"/> |
+|:---|:---:|:---:|:---:|
+| **雨** — 覆盖 5%, α 0.30 | <img src="assets/results/vi_rain_input.jpg" width="320"/> | <img src="assets/results/vi_rain_ir.jpg" width="320"/> | <img src="assets/results/vi_rain_fused.jpg" width="320"/> |
+| **雪** — 覆盖 6%, α 0.70 | <img src="assets/results/vi_snow_input.jpg" width="320"/> | <img src="assets/results/vi_snow_ir.jpg" width="320"/> | <img src="assets/results/vi_snow_fused.jpg" width="320"/> |
+| **雾** — β 1.0 | <img src="assets/results/vi_haze_input.jpg" width="320"/> | <img src="assets/results/vi_haze_ir.jpg" width="320"/> | <img src="assets/results/vi_haze_fused.jpg" width="320"/> |
+| **噪声** — σ 10 + 泊松 | <img src="assets/results/vi_noise_input.jpg" width="320"/> | <img src="assets/results/vi_noise_ir.jpg" width="320"/> | <img src="assets/results/vi_noise_fused.jpg" width="320"/> |
+| **模糊** — 21×21, σ 2.0 | <img src="assets/results/vi_blur_input.jpg" width="320"/> | <img src="assets/results/vi_blur_ir.jpg" width="320"/> | <img src="assets/results/vi_blur_fused.jpg" width="320"/> |
+| **低光照** — γ 2.0 | <img src="assets/results/vi_low_light_input.jpg" width="320"/> | <img src="assets/results/vi_low_light_ir.jpg" width="320"/> | <img src="assets/results/vi_low_light_fused.jpg" width="320"/> |
 
 ### 红外退化输入（配对干净可见光）
 
 | 条件 | 可见光（输入） | 退化红外（输入） | ReQFuse 输出 |
-|---|---|---|---|
-| **噪声** — σ 10 + 泊松 | <img src="assets/results/ir_noise_vi.jpg" width="285"/> | <img src="assets/results/ir_noise_input.jpg" width="285"/> | <img src="assets/results/ir_noise_fused.jpg" width="285"/> |
-| **条纹** — 列 σ 6 | <img src="assets/results/ir_stripe_vi.jpg" width="285"/> | <img src="assets/results/ir_stripe_input.jpg" width="285"/> | <img src="assets/results/ir_stripe_fused.jpg" width="285"/> |
-| **低对比度** — 增益 0.5 | <img src="assets/results/ir_low_contrast_vi.jpg" width="285"/> | <img src="assets/results/ir_low_contrast_input.jpg" width="285"/> | <img src="assets/results/ir_low_contrast_fused.jpg" width="285"/> |
+|:---|:---:|:---:|:---:|
+| **噪声** — σ 10 + 泊松 | <img src="assets/results/ir_noise_vi.jpg" width="320"/> | <img src="assets/results/ir_noise_input.jpg" width="320"/> | <img src="assets/results/ir_noise_fused.jpg" width="320"/> |
+| **条纹** — 列 σ 6 | <img src="assets/results/ir_stripe_vi.jpg" width="320"/> | <img src="assets/results/ir_stripe_input.jpg" width="320"/> | <img src="assets/results/ir_stripe_fused.jpg" width="320"/> |
+| **低对比度** — 增益 0.5 | <img src="assets/results/ir_low_contrast_vi.jpg" width="320"/> | <img src="assets/results/ir_low_contrast_input.jpg" width="320"/> | <img src="assets/results/ir_low_contrast_fused.jpg" width="320"/> |
 
-*表格为白天场景 `00123D`；上方 teaser 为夜间场景 `00004N` 的雨条件。
+*下方两张表为白天场景 `00123D`；上方夜景表为 `00004N`。
 对 `data/test_MSRS/<条件>/<强度>/` 运行 [test.py](test.py) 即可复现，
 逐条件输出位于 `results/`。*
 
