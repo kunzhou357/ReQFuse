@@ -3,10 +3,41 @@
 **面向退化输入的选择性恢复与恢复后质量引导融合（PyTorch）。**
 
 ReQFuse 先在各自模态内恢复图像，再估计恢复后的残留误差，用该质量信号同时控制源特征与跨模态消息，
-最后由 Restormer 风格的融合网络输出融合结果。网络针对合成退化端到端训练，
-单一模型即可应对雨、雪、雾、噪声、模糊、低光照、红外条纹与低对比度，无需按条件微调。
+最后由 Restormer 风格的融合网络输出融合结果。单一模型只针对合成退化池训练一次，
+即可应对雨、雪、雾、噪声、模糊、低光照、红外条纹与低对比度——无需按条件微调。
 
-![对比图：干净可见光 / 雨退化可见光 / 融合输出](assets/teaser_rain.png)
+<p align="center">
+  <img src="assets/teaser.jpg" width="920" alt="干净可见光 | 雨退化可见光 | 红外 | ReQFuse 输出（MSRS 夜景）"/>
+</p>
+
+## 融合结果
+
+以下结果全部由同一份训练配方产生：**MSRS 测试集 + 人工合成退化，中等强度
+（level 2）**，由 [generate_degradation.py](generate_degradation.py) 生成。
+所有条件使用同一份模型权重。
+
+### 可见光退化输入（配对干净红外）
+
+| 条件 | 退化可见光（输入） | 红外（输入） | ReQFuse 输出 |
+|---|---|---|---|
+| **雨** — 覆盖 5%, α 0.30 | <img src="assets/results/vi_rain_input.jpg" width="285"/> | <img src="assets/results/vi_rain_ir.jpg" width="285"/> | <img src="assets/results/vi_rain_fused.jpg" width="285"/> |
+| **雪** — 覆盖 6%, α 0.70 | <img src="assets/results/vi_snow_input.jpg" width="285"/> | <img src="assets/results/vi_snow_ir.jpg" width="285"/> | <img src="assets/results/vi_snow_fused.jpg" width="285"/> |
+| **雾** — β 1.0 | <img src="assets/results/vi_haze_input.jpg" width="285"/> | <img src="assets/results/vi_haze_ir.jpg" width="285"/> | <img src="assets/results/vi_haze_fused.jpg" width="285"/> |
+| **噪声** — σ 10 + 泊松 | <img src="assets/results/vi_noise_input.jpg" width="285"/> | <img src="assets/results/vi_noise_ir.jpg" width="285"/> | <img src="assets/results/vi_noise_fused.jpg" width="285"/> |
+| **模糊** — 21×21, σ 2.0 | <img src="assets/results/vi_blur_input.jpg" width="285"/> | <img src="assets/results/vi_blur_ir.jpg" width="285"/> | <img src="assets/results/vi_blur_fused.jpg" width="285"/> |
+| **低光照** — γ 2.0 | <img src="assets/results/vi_low_light_input.jpg" width="285"/> | <img src="assets/results/vi_low_light_ir.jpg" width="285"/> | <img src="assets/results/vi_low_light_fused.jpg" width="285"/> |
+
+### 红外退化输入（配对干净可见光）
+
+| 条件 | 可见光（输入） | 退化红外（输入） | ReQFuse 输出 |
+|---|---|---|---|
+| **噪声** — σ 10 + 泊松 | <img src="assets/results/ir_noise_vi.jpg" width="285"/> | <img src="assets/results/ir_noise_input.jpg" width="285"/> | <img src="assets/results/ir_noise_fused.jpg" width="285"/> |
+| **条纹** — 列 σ 6 | <img src="assets/results/ir_stripe_vi.jpg" width="285"/> | <img src="assets/results/ir_stripe_input.jpg" width="285"/> | <img src="assets/results/ir_stripe_fused.jpg" width="285"/> |
+| **低对比度** — 增益 0.5 | <img src="assets/results/ir_low_contrast_vi.jpg" width="285"/> | <img src="assets/results/ir_low_contrast_input.jpg" width="285"/> | <img src="assets/results/ir_low_contrast_fused.jpg" width="285"/> |
+
+*表格为白天场景 `00123D`；上方 teaser 为夜间场景 `00004N` 的雨条件。
+对 `data/test_MSRS/<条件>/<强度>/` 运行 [test.py](test.py) 即可复现，
+逐条件输出位于 `results/`。*
 
 ## 方法概览
 
@@ -34,28 +65,12 @@ flowchart LR
 - **选择性恢复。** 每路模态由三层 Restormer U-Net 预测*修改需求*与有界残差，
   `restored = input + applied_demand × residual`。需求门对重建梯度 detach，
   恢复/融合无法通过关闭该门降低损失——只有辅助监督能移动它。
-- **恢复后质量控制。** 误差头在 detach 输入上回归归一化残差 `u`，
-  映射为 `e = 0.1 · ReLU(u)` 与质量 `q = exp(−e / 0.1)`。质量门控局部窗口通道
-  交叉注意力的源 K/V（双向，融合第 2–3 尺度）与逐尺度特征合并，最后由四层融合
-  U-Net 输出 RGB。
+- **恢复后质量控制。** 误差头在 detach 输入上回归归一化残差，
+  经 `q = exp(−e / 0.1)` 映射为质量。质量门控局部窗口通道交叉注意力的源 K/V
+  （双向，融合第 2–3 尺度）与逐尺度特征合并，最后由四层融合 U-Net 输出 RGB。
 
 实现版本 `restormer_v2`，参数量 **8,725,358**。退化掩码仅用于训练监督；
 **推理只输入配准好的 VI/IR 图像对**。
-
-## 融合结果
-
-以下结果全部来自 **MSRS 测试集 + 人工合成退化**（由
-[generate_degradation.py](generate_degradation.py) 生成，强度为 **level 2 / 中等**），
-由同一份训练配方融合——未做任何按条件微调。图中场景为 `00123D`；
-每个条件完整挑出的 4 个场景在运行 `test.py` 后位于 `results/`。
-
-**可见光退化**（退化可见光 + 干净红外输入 → 融合）：
-
-![六种可见光退化下的融合](assets/results_visible_degradations.png)
-
-**红外退化**（干净可见光 + 退化红外输入 → 融合）：
-
-![三种红外退化下的融合](assets/results_infrared_degradations.png)
 
 ## 退化协议
 
@@ -82,11 +97,10 @@ flowchart LR
 | 低对比度 | IR | α=0.8 | α=0.5 | α=0.3 |
 
 实现说明：低光照以平滑 max-RGB 估计照明、按 Retinex 形式衰减，并在线性 RGB 域耦合
-shot/read 噪声；雨/雪为程序化精灵合成，按区域**实测覆盖率**控制（雨丝长 12–30 px、
-±20°；雪花半径 1–6）；雾的空气光为 0.75、距离上限 0.7，可选由深度图驱动透射率；
-低对比度围绕原均值缩放。强度预设固定在代码中——训练与测试集生成共用同一张表。
-退化形式与部分参数参考 DSPFusion / ControlFusion 的任务设置；三级协议与天气合成方式
-为本项目的选择。
+shot/read 噪声；雨/雪为程序化精灵合成，按区域**实测覆盖率**控制；雾的空气光为 0.75、
+距离上限 0.7，可选由深度图驱动透射率；低对比度围绕原均值缩放。强度预设固定在代码中
+——训练与测试集生成共用同一张表。退化形式与部分参数参考 DSPFusion / ControlFusion
+的任务设置；三级协议与天气合成方式为本项目的选择。
 
 ## 安装
 
@@ -103,26 +117,14 @@ pip install -r requirements.txt
 三个入口脚本遵循同一约定：**编辑文件顶部的 `EDIT HERE` 配置块，然后无参数运行**
 （传入任何命令行参数都会中止）。
 
-### 训练 —— `train.py`
+| 脚本 | 用途 | 关键默认值 |
+|---|---|---|
+| [train.py](train.py) | 两阶段训练：`RESTORATION_EPOCHS` 仅恢复，随后 `FUSION_EPOCHS` 联合轮次（融合损失渐入） | 128×128 裁剪、batch 4 × 累积 2、AdamW 2e-4；`ONLINE_DEGRADATION=True` 在线施加退化池 |
+| [test.py](test.py) | 融合所有配准 VI/IR 图像对；输出 `rgb/` + `gray/` PNG | 检查点 `ckpt/latest.pth` |
+| [generate_degradation.py](generate_degradation.py) | 将算子固化为带指纹的配对数据集（`run_info.json`、掩码、包络、`records.csv`） | 九种条件 × 三档强度，全图或约 40% 局部 |
 
-两个阶段：`RESTORATION_EPOCHS` 个仅恢复轮次，随后 `FUSION_EPOCHS` 个联合轮次
-（融合损失在 `transition_epochs` 内线性引入）。默认配方：128×128 裁剪、batch 4 ×
-梯度累积 2、AdamW 2e-4、逐阶段 warmup + 余弦衰减。`ONLINE_DEGRADATION=True`（默认）
-直接读取 HQ 原图并在线施加退化池；`False` 时通过 `HQ_*_DIR` 使用
-`generate_degradation.py` 预生成的配对数据。每轮写 `OUTPUT_DIR/latest.pth`，
-每 10 轮额外保存 `epoch_XXX.pth`；`RESUME_TRAINING=True` 续训时严格校验并恢复
-配方、数据指纹与随机状态。
-
-### 推理 —— `test.py`
-
-加载 `CHECKPOINT_PATH`，融合 `VISIBLE_DIR`/`INFRARED_DIR` 下所有配准图像对，
-输出 RGB 与灰度 PNG 到 `OUTPUT_DIR/rgb` 和 `OUTPUT_DIR/gray`。
-
-### 离线退化 —— `generate_degradation.py`
-
-将共享算子固化为可复现的配对数据集：退化 VI/IR、监督掩码、软包络、预览图与逐样本
-`records.csv`；每个输出目录记录 `run_info.json` 指纹，设置或数据源不同的重复生成会被
-拒绝。雾退化可选使用深度图目录生成空间变化的透射率。
+续训（`RESUME_TRAINING=True`）会严格校验并恢复配方、数据指纹与随机状态；
+检查点自描述，始终以 `strict=True` 加载。
 
 ## 数据约定
 
@@ -145,8 +147,7 @@ utils/                     数据、退化算子、损失、实验工具
 assets/                    README 配图
 ```
 
-检查点自描述（模型配置、优化器、随机状态、训练签名），且始终以 `strict=True` 加载；
-不兼容版本会显式报错。数据集与模型权重不随仓库分发——请用上述脚本在本地准备。
+数据集与模型权重不随仓库分发——请用上述脚本在本地准备。
 
 ## 参考
 
