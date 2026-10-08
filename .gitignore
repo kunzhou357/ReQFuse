@@ -2,10 +2,10 @@ __pycache__/
 *.pyc
 .idea/
 .vscode/
-data/
-ckpt/
-outputs/
-results/
+/data/
+/ckpt/
+/outputs/
+/results/
 *.pth
 .zcode/
 .zcodeignore
